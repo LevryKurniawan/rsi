@@ -29,4 +29,5 @@ async function getRSI() {
   });
 }
 
+// Jalankan fungsi untuk pertama kali
 getRSI();
