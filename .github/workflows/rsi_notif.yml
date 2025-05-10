@@ -1,51 +1,30 @@
-name: RSI Notifier
+curl -s "https://api.binance.com/api/v3/klines?symbol=BTCFDUSD&interval=1m&limit=100" -o data.json
 
-on:
-  schedule:
-    - cron: '*/1 * * * *'  # setiap menit
-  workflow_dispatch:       # bisa dijalankan manual
+# Gunakan kutipan ganda agar shell menangani ekspresi dengan benar
+prices=($(jq -r ".[][4]" data.json))
 
-jobs:
-  notify:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+gain=0
+loss=0
 
-      - name: Hitung RSI dan Kirim Notifikasi
-        run: |
-          # Ambil data harga BTC/FDUSD dari Binance
-          curl -s "https://api.binance.com/api/v3/klines?symbol=BTCFDUSD&interval=1m&limit=100" -o data.json
-          
-          # Ambil harga penutupan (indeks ke-4 dalam setiap data) menggunakan jq
-          prices=($(jq -r '.[].4' data.json))
-          
-          gain=0
-          loss=0
-          
-          # Hitung Gain dan Loss
-          for ((i=${#prices[@]}-7; i<${#prices[@]}-1; i++)); do
-            diff=$(echo "${prices[i+1]} - ${prices[i]}" | bc -l)
-            if (( $(echo "$diff > 0" | bc -l) )); then
-              gain=$(echo "$gain + $diff" | bc -l)
-            else
-              loss=$(echo "$loss - $diff" | bc -l)
-            fi
-          done
-          
-          # Rata-rata Gain dan Loss
-          avgGain=$(echo "$gain / 6" | bc -l)
-          avgLoss=$(echo "$loss / 6" | bc -l)
+for ((i=${#prices[@]}-7; i<${#prices[@]}-1; i++)); do
+  diff=$(echo "${prices[i+1]} - ${prices[i]}" | bc -l)
+  if (( $(echo "$diff > 0" | bc -l) )); then
+    gain=$(echo "$gain + $diff" | bc -l)
+  else
+    loss=$(echo "$loss - $diff" | bc -l)
+  fi
+done
 
-          # Hitung RSI
-          if (( $(echo "$avgLoss == 0" | bc -l) )); then
-            rsi=100
-          else
-            rs=$(echo "$avgGain / $avgLoss" | bc -l)
-            rsi=$(echo "100 - (100 / (1 + $rs))" | bc -l)
-          fi
+avgGain=$(echo "$gain / 6" | bc -l)
+avgLoss=$(echo "$loss / 6" | bc -l)
 
-          rsiFmt=$(printf "%.2f" $rsi)
+if (( $(echo "$avgLoss == 0" | bc -l) )); then
+  rsi=100
+else
+  rs=$(echo "$avgGain / $avgLoss" | bc -l)
+  rsi=$(echo "100 - (100 / (1 + $rs))" | bc -l)
+fi
 
-          # Kirim notifikasi ke ntfy.sh
-          curl -X POST -d "RSI 6 (1m) BTC/FDUSD: $rsiFmt" https://ntfy.sh/A
+rsiFmt=$(printf "%.2f" $rsi)
+
+curl -X POST -d "RSI 6 (1m) BTC/FDUSD: $rsiFmt" https://ntfy.sh/A
