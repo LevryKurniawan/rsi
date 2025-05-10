@@ -1,3 +1,3 @@
-import { serve } from "https://deno.land/std/http/server.ts";
+import { Cron } from "https://deno.land/x/deno_cron/cron.ts";
 
-serve(() => fetch("https://ntfy.sh/A", { method: "POST", body: "2" }));
+new Cron("*/1 * * * *", () => fetch("https://ntfy.sh/A", { method: "POST", body: "1" }));
