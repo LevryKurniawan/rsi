@@ -2,20 +2,28 @@ name: RSI Notifier
 
 on:
   schedule:
-    - cron: '*/1 * * * *'  # Setiap menit
-  workflow_dispatch:       # Bisa dijalankan manual
+    - cron: '*/1 * * * *'  # setiap menit
+  workflow_dispatch:       # bisa dijalankan manual
 
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Ambil data harga
-        run: |
-          curl -s "https://api.binance.com/api/v3/klines?symbol=BTCFDUSD&interval=1m&limit=100" -o data.json
-          prices=($(jq '.[].4' -r data.json))
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
+      - name: Hitung RSI dan Kirim Notifikasi
+        run: |
+          # Ambil data harga BTC/FDUSD dari Binance
+          curl -s "https://api.binance.com/api/v3/klines?symbol=BTCFDUSD&interval=1m&limit=100" -o data.json
+          
+          # Ambil harga penutupan (indeks ke-4 dalam setiap data)
+          prices=($(jq -r '.[] | .[4]' data.json))
+          
           gain=0
           loss=0
+          
+          # Hitung Gain dan Loss
           for ((i=${#prices[@]}-7; i<${#prices[@]}-1; i++)); do
             diff=$(echo "${prices[i+1]} - ${prices[i]}" | bc -l)
             if (( $(echo "$diff > 0" | bc -l) )); then
@@ -24,10 +32,12 @@ jobs:
               loss=$(echo "$loss - $diff" | bc -l)
             fi
           done
-
+          
+          # Rata-rata Gain dan Loss
           avgGain=$(echo "$gain / 6" | bc -l)
           avgLoss=$(echo "$loss / 6" | bc -l)
 
+          # Hitung RSI
           if (( $(echo "$avgLoss == 0" | bc -l) )); then
             rsi=100
           else
@@ -36,4 +46,6 @@ jobs:
           fi
 
           rsiFmt=$(printf "%.2f" $rsi)
+
+          # Kirim notifikasi ke ntfy.sh
           curl -X POST -d "RSI 6 (1m) BTC/FDUSD: $rsiFmt" https://ntfy.sh/A
