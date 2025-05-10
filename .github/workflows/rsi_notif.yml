@@ -17,8 +17,8 @@ jobs:
           # Ambil data harga BTC/FDUSD dari Binance
           curl -s "https://api.binance.com/api/v3/klines?symbol=BTCFDUSD&interval=1m&limit=100" -o data.json
           
-          # Ambil harga penutupan (indeks ke-4 dalam setiap data)
-          prices=($(jq -r '.[] | .[4]' data.json))
+          # Ambil harga penutupan (indeks ke-4 dalam setiap data) menggunakan jq
+          prices=($(jq -r '.[].4' data.json))
           
           gain=0
           loss=0
