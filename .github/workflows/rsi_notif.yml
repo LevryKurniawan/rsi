@@ -1,30 +1,42 @@
-curl -s "https://api.binance.com/api/v3/klines?symbol=BTCFDUSD&interval=1m&limit=100" -o data.json
+name: RSI Notifier
 
-# Gunakan kutipan ganda agar shell menangani ekspresi dengan benar
-prices=($(jq -r ".[][4]" data.json))
+on:
+  schedule:
+    - cron: "*/5 * * * *"  # jalan tiap 5 menit
+  workflow_dispatch:
 
-gain=0
-loss=0
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hitung RSI dan Kirim ke ntfy
+        run: |
+          curl -s "https://api.binance.com/api/v3/klines?symbol=BTCFDUSD&interval=1m&limit=100" -o data.json
 
-for ((i=${#prices[@]}-7; i<${#prices[@]}-1; i++)); do
-  diff=$(echo "${prices[i+1]} - ${prices[i]}" | bc -l)
-  if (( $(echo "$diff > 0" | bc -l) )); then
-    gain=$(echo "$gain + $diff" | bc -l)
-  else
-    loss=$(echo "$loss - $diff" | bc -l)
-  fi
-done
+          prices=($(jq -r '.[][4]' data.json))
 
-avgGain=$(echo "$gain / 6" | bc -l)
-avgLoss=$(echo "$loss / 6" | bc -l)
+          gain=0
+          loss=0
 
-if (( $(echo "$avgLoss == 0" | bc -l) )); then
-  rsi=100
-else
-  rs=$(echo "$avgGain / $avgLoss" | bc -l)
-  rsi=$(echo "100 - (100 / (1 + $rs))" | bc -l)
-fi
+          for ((i=${#prices[@]}-7; i<${#prices[@]}-1; i++)); do
+            diff=$(echo "${prices[i+1]} - ${prices[i]}" | bc -l)
+            if (( $(echo "$diff > 0" | bc -l) )); then
+              gain=$(echo "$gain + $diff" | bc -l)
+            else
+              loss=$(echo "$loss - $diff" | bc -l)
+            fi
+          done
 
-rsiFmt=$(printf "%.2f" $rsi)
+          avgGain=$(echo "$gain / 6" | bc -l)
+          avgLoss=$(echo "$loss / 6" | bc -l)
 
-curl -X POST -d "RSI 6 (1m) BTC/FDUSD: $rsiFmt" https://ntfy.sh/A
+          if (( $(echo "$avgLoss == 0" | bc -l) )); then
+            rsi=100
+          else
+            rs=$(echo "$avgGain / $avgLoss" | bc -l)
+            rsi=$(echo "100 - (100 / (1 + $rs))" | bc -l)
+          fi
+
+          rsiFmt=$(printf "%.2f" $rsi)
+
+          curl -X POST -d "RSI 6 (1m) BTC/FDUSD: $rsiFmt" https://ntfy.sh/A
